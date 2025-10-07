@@ -100,7 +100,7 @@ cat tests/fixtures/cisco.json | ./bin/usl4l --format json
 
 ## Library Usage
 
-To use `usl4l` as a library in your own Lua projects, require the `usl4l.measurement` and `usl4l.model` modules.
+To use `usl4l` as a library, require the `usl4l.measurement` and `usl4l.model` modules.
 
 As an example, consider doing load testing and capacity planning for an HTTP server. To model the
 behavior of the system using the [USL][USL], you must first gather a set of measurements of the
@@ -108,13 +108,24 @@ system. These measurements must be of two of the three parameters of [Little's L
 response time (in seconds), throughput (in requests per second), and concurrency (i.e. the number of
 concurrent clients).
 
+Because response time tends to be a property of load (i.e. it rises as throughput or concurrency
+rises), the dependent variable in your tests should be mean response time. This leaves either
+throughput or concurrency as your independent variable, but thanks to [Little's Law][LL] it doesn't
+matter which one you use. For the purposes of discussion, let's say you measure throughput as a
+function of the number of concurrent clients working at a fixed rate.
+
 After your load testing is done, you should have a set of measurements shaped like this:
 
 |concurrency|throughput|
 |-----------|----------|
 |          1|    955.16|
 |          2|   1878.91|
-|          ...|   ...|
+|          3|   2688.01|
+|          4|   3548.68|
+|          5|   4315.54|
+|          6|   5130.43|
+|          7|   5931.37|
+|          8|   6531.08|
 
 For simplicity's sake, let's assume you're storing this as a table of tables. Now you can build a model
 and begin estimating things:
@@ -138,6 +149,79 @@ for i = 10, 200, 10 do
   print(string.format("At %d workers, expect %f req/sec", i, fitted_model:throughput_at_concurrency(i)))
 end
 ```
+
+### Example with `wrk2`
+
+[wrk2](https://github.com/giltene/wrk2) is a popular load testing tool that can be used to generate the necessary measurements for `usl4l`.
+
+First, run `wrk2` against your application with varying concurrency levels. For example, to test with 1 to 32 concurrent connections:
+
+```bash
+#!/bin/bash
+
+for i in {1..32}; do
+  echo "Testing with $i connections..."
+  # This example assumes a fixed rate. Adjust -R as needed for your application.
+  wrk2 -t1 -c$i -d30s -R2000 http://localhost:8080/api > "results/c$i.txt"
+done
+```
+
+This script runs `wrk2` for 30 seconds at each concurrency level from 1 to 32 and saves the output to a separate file for each run.
+
+Next, you need to parse the output of `wrk2` to extract the concurrency and throughput for each run. The following Lua script will parse the result files, build a model, and print predictions:
+
+```lua
+local measurement = require "usl4l.measurement"
+local model = require "usl4l.model"
+
+local measurements = {}
+
+-- Create a directory for results if it doesn't exist
+-- (This part would be run before the bash script)
+-- os.execute("mkdir -p results")
+
+for i = 1, 32 do
+  local concurrency = i
+  local filename = string.format("results/c%d.txt", i)
+  local f = io.open(filename, "r")
+
+  if f then
+    local content = f:read("*a")
+    f:close()
+
+    -- Find the throughput from the wrk2 output
+    local _, _, throughput = string.find(content, "Requests/sec:%s+(%d+.%d+)")
+    if throughput then
+      print(string.format("Concurrency: %d, Throughput: %f", concurrency, throughput))
+      table.insert(measurements, measurement.of_concurrency_and_throughput(concurrency, tonumber(throughput)))
+    else
+      print(string.format("Could not find throughput for concurrency %d in %s", i, filename))
+    end
+  else
+    print(string.format("Could not open file %s", filename))
+  end
+end
+
+if #measurements > 1 then
+  -- Build a model from the measurements
+  local fitted_model = model.build(measurements)
+
+  print("\n--- Model Results ---")
+  print(string.format("Sigma (contention): %f", fitted_model.sigma))
+  print(string.format("Kappa (crosstalk): %f", fitted_model.kappa))
+  print(string.format("Lambda (throughput at N=1): %f", fitted_model.lambda))
+  print(string.format("Max Throughput: %f at %d users", fitted_model:max_throughput(), fitted_model:max_concurrency()))
+
+  print("\n--- Predictions ---")
+  for i = 40, 100, 10 do
+    print(string.format("At %d workers, expect %f req/sec", i, fitted_model:throughput_at_concurrency(i)))
+  end
+else
+  print("\nNot enough measurements to build a model.")
+end
+```
+
+This script reads each `wrk2` output file, extracts the throughput, and creates a `usl4l` model. It then prints the model's parameters and some predictions for higher concurrency levels.
 
 ## Attribution
 
