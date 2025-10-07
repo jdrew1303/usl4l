@@ -13,9 +13,94 @@ stay under your SLA's latency requirements.
 
 The model coefficients and predictions should be within 0.02% of those listed in the book.
 
-## How to use this
+## Command-Line Interface
 
-To use `usl4l`, require the `usl4l.measurement` and `usl4l.model` modules.
+`usl4l` now includes a powerful command-line interface (CLI) for quick and easy scalability analysis without needing to write any code.
+
+### Usage
+
+The basic usage is:
+```bash
+./bin/usl4l [options] [file]
+```
+The `file` argument is the path to your data file. If not provided, the script will read data from standard input.
+
+### Input Formats
+
+The CLI supports both CSV and JSON input formats.
+
+#### CSV
+
+By default, the tool expects CSV data with two columns: `concurrency` and `throughput`. A header row is expected and will be skipped.
+
+**Example with a CSV file:**
+```bash
+# Run the model using the sample data
+./bin/usl4l tests/fixtures/cisco.csv
+```
+
+The output will show the model parameters and peak performance:
+```
+Model Parameters:
+  Sigma (Contention): 0.026716
+  Kappa (Crosstalk):  0.000769
+  Lambda (Ideal):     995.648786
+
+Peak Performance:
+  Max Concurrency: 35
+  Max Throughput:  12341.75
+```
+
+#### JSON
+
+To use JSON, specify the format with the `-f` or `--format` option. The JSON data can be an array of objects (each with `concurrency` and `throughput` keys) or an array of arrays.
+
+**Example with a JSON file:**
+```bash
+./bin/usl4l --format json tests/fixtures/cisco.json
+```
+
+### Making Predictions
+
+Use the `-p` or `--predict` option to predict throughput at specific concurrency levels. You can use this option multiple times.
+
+**Example:**
+```bash
+./bin/usl4l --predict 50 --predict 100 tests/fixtures/cisco.csv
+```
+This will add a "Predictions" section to the output:
+```
+Predictions:
+  At concurrency 50, expected throughput is 11211.53
+  At concurrency 100, expected throughput is 8843.21
+```
+
+### Visualization with Gnuplot
+
+The `--plot` flag generates a Gnuplot script to visualize the model. You can pipe the output directly to `gnuplot` to display the graph. You may need to install Gnuplot first (`sudo apt-get install gnuplot`).
+
+**Example:**
+```bash
+./bin/usl4l --plot tests/fixtures/cisco.csv | gnuplot -p
+```
+This will open a window showing the fitted USL curve along with the original data points.
+
+### Piping Data
+
+The CLI can also read data from `stdin`, which is useful for chaining commands.
+
+**Example:**
+```bash
+cat tests/fixtures/cisco.csv | ./bin/usl4l
+```
+Or for JSON:
+```bash
+cat tests/fixtures/cisco.json | ./bin/usl4l --format json
+```
+
+## Library Usage
+
+To use `usl4l` as a library, require the `usl4l.measurement` and `usl4l.model` modules.
 
 As an example, consider doing load testing and capacity planning for an HTTP server. To model the
 behavior of the system using the [USL][USL], you must first gather a set of measurements of the
@@ -65,7 +150,7 @@ for i = 10, 200, 10 do
 end
 ```
 
-## Example with `wrk2`
+### Example with `wrk2`
 
 [wrk2](https://github.com/giltene/wrk2) is a popular load testing tool that can be used to generate the necessary measurements for `usl4l`.
 
@@ -149,14 +234,6 @@ free e-book by [Baron Schwartz][BS], author of [High Performance MySQL][MySQL] a
 [VividCortex][VC]. Trying to use this library without actually understanding the concepts behind
 [Little's Law][LL], [Amdahl's Law][AL], and the [Universal Scalability Law][USL] will be difficult
 and potentially misleading.
-
-## Roadmap
-
-While `usl4l` is currently a functional port of `usl4j`, there are several potential enhancements for the future:
-
-*   **Command-Line Interface (CLI):** A simple CLI for quick modeling without needing to write a script.
-*   **Additional Input Formats:** Support for CSV or JSON input to make it easier to work with data from various load testing tools.
-*   **Visualization:** Integration with a plotting library to generate graphs of the scalability model.
 
 ## License
 
