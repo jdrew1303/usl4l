@@ -13,9 +13,94 @@ stay under your SLA's latency requirements.
 
 The model coefficients and predictions should be within 0.02% of those listed in the book.
 
-## How to use this
+## Command-Line Interface
 
-To use `usl4l`, require the `usl4l.measurement` and `usl4l.model` modules.
+`usl4l` now includes a powerful command-line interface (CLI) for quick and easy scalability analysis without needing to write any code.
+
+### Usage
+
+The basic usage is:
+```bash
+./bin/usl4l [options] [file]
+```
+The `file` argument is the path to your data file. If not provided, the script will read data from standard input.
+
+### Input Formats
+
+The CLI supports both CSV and JSON input formats.
+
+#### CSV
+
+By default, the tool expects CSV data with two columns: `concurrency` and `throughput`. A header row is expected and will be skipped.
+
+**Example with a CSV file:**
+```bash
+# Run the model using the sample data
+./bin/usl4l tests/fixtures/cisco.csv
+```
+
+The output will show the model parameters and peak performance:
+```
+Model Parameters:
+  Sigma (Contention): 0.026716
+  Kappa (Crosstalk):  0.000769
+  Lambda (Ideal):     995.648786
+
+Peak Performance:
+  Max Concurrency: 35
+  Max Throughput:  12341.75
+```
+
+#### JSON
+
+To use JSON, specify the format with the `-f` or `--format` option. The JSON data can be an array of objects (each with `concurrency` and `throughput` keys) or an array of arrays.
+
+**Example with a JSON file:**
+```bash
+./bin/usl4l --format json tests/fixtures/cisco.json
+```
+
+### Making Predictions
+
+Use the `-p` or `--predict` option to predict throughput at specific concurrency levels. You can use this option multiple times.
+
+**Example:**
+```bash
+./bin/usl4l --predict 50 --predict 100 tests/fixtures/cisco.csv
+```
+This will add a "Predictions" section to the output:
+```
+Predictions:
+  At concurrency 50, expected throughput is 11211.53
+  At concurrency 100, expected throughput is 8843.21
+```
+
+### Visualization with Gnuplot
+
+The `--plot` flag generates a Gnuplot script to visualize the model. You can pipe the output directly to `gnuplot` to display the graph. You may need to install Gnuplot first (`sudo apt-get install gnuplot`).
+
+**Example:**
+```bash
+./bin/usl4l --plot tests/fixtures/cisco.csv | gnuplot -p
+```
+This will open a window showing the fitted USL curve along with the original data points.
+
+### Piping Data
+
+The CLI can also read data from `stdin`, which is useful for chaining commands.
+
+**Example:**
+```bash
+cat tests/fixtures/cisco.csv | ./bin/usl4l
+```
+Or for JSON:
+```bash
+cat tests/fixtures/cisco.json | ./bin/usl4l --format json
+```
+
+## Library Usage
+
+To use `usl4l` as a library in your own Lua projects, require the `usl4l.measurement` and `usl4l.model` modules.
 
 As an example, consider doing load testing and capacity planning for an HTTP server. To model the
 behavior of the system using the [USL][USL], you must first gather a set of measurements of the
@@ -23,24 +108,13 @@ system. These measurements must be of two of the three parameters of [Little's L
 response time (in seconds), throughput (in requests per second), and concurrency (i.e. the number of
 concurrent clients).
 
-Because response time tends to be a property of load (i.e. it rises as throughput or concurrency
-rises), the dependent variable in your tests should be mean response time. This leaves either
-throughput or concurrency as your independent variable, but thanks to [Little's Law][LL] it doesn't
-matter which one you use. For the purposes of discussion, let's say you measure throughput as a
-function of the number of concurrent clients working at a fixed rate.
-
 After your load testing is done, you should have a set of measurements shaped like this:
 
 |concurrency|throughput|
 |-----------|----------|
 |          1|    955.16|
 |          2|   1878.91|
-|          3|   2688.01|
-|          4|   3548.68|
-|          5|   4315.54|
-|          6|   5130.43|
-|          7|   5931.37|
-|          8|   6531.08|
+|          ...|   ...|
 
 For simplicity's sake, let's assume you're storing this as a table of tables. Now you can build a model
 and begin estimating things:
@@ -65,79 +139,6 @@ for i = 10, 200, 10 do
 end
 ```
 
-## Example with `wrk2`
-
-[wrk2](https://github.com/giltene/wrk2) is a popular load testing tool that can be used to generate the necessary measurements for `usl4l`.
-
-First, run `wrk2` against your application with varying concurrency levels. For example, to test with 1 to 32 concurrent connections:
-
-```bash
-#!/bin/bash
-
-for i in {1..32}; do
-  echo "Testing with $i connections..."
-  # This example assumes a fixed rate. Adjust -R as needed for your application.
-  wrk2 -t1 -c$i -d30s -R2000 http://localhost:8080/api > "results/c$i.txt"
-done
-```
-
-This script runs `wrk2` for 30 seconds at each concurrency level from 1 to 32 and saves the output to a separate file for each run.
-
-Next, you need to parse the output of `wrk2` to extract the concurrency and throughput for each run. The following Lua script will parse the result files, build a model, and print predictions:
-
-```lua
-local measurement = require "usl4l.measurement"
-local model = require "usl4l.model"
-
-local measurements = {}
-
--- Create a directory for results if it doesn't exist
--- (This part would be run before the bash script)
--- os.execute("mkdir -p results")
-
-for i = 1, 32 do
-  local concurrency = i
-  local filename = string.format("results/c%d.txt", i)
-  local f = io.open(filename, "r")
-
-  if f then
-    local content = f:read("*a")
-    f:close()
-
-    -- Find the throughput from the wrk2 output
-    local _, _, throughput = string.find(content, "Requests/sec:%s+(%d+.%d+)")
-    if throughput then
-      print(string.format("Concurrency: %d, Throughput: %f", concurrency, throughput))
-      table.insert(measurements, measurement.of_concurrency_and_throughput(concurrency, tonumber(throughput)))
-    else
-      print(string.format("Could not find throughput for concurrency %d in %s", i, filename))
-    end
-  else
-    print(string.format("Could not open file %s", filename))
-  end
-end
-
-if #measurements > 1 then
-  -- Build a model from the measurements
-  local fitted_model = model.build(measurements)
-
-  print("\n--- Model Results ---")
-  print(string.format("Sigma (contention): %f", fitted_model.sigma))
-  print(string.format("Kappa (crosstalk): %f", fitted_model.kappa))
-  print(string.format("Lambda (throughput at N=1): %f", fitted_model.lambda))
-  print(string.format("Max Throughput: %f at %d users", fitted_model:max_throughput(), fitted_model:max_concurrency()))
-
-  print("\n--- Predictions ---")
-  for i = 40, 100, 10 do
-    print(string.format("At %d workers, expect %f req/sec", i, fitted_model:throughput_at_concurrency(i)))
-  end
-else
-  print("\nNot enough measurements to build a model.")
-end
-```
-
-This script reads each `wrk2` output file, extracts the throughput, and creates a `usl4l` model. It then prints the model's parameters and some predictions for higher concurrency levels.
-
 ## Attribution
 
 This library is a Lua port of Coda Hale's excellent [usl4j-repo] library. His [blog post on the subject][usl4j-blog] is also a recommended read. The core concepts and the test data are derived from his original work.
@@ -149,14 +150,6 @@ free e-book by [Baron Schwartz][BS], author of [High Performance MySQL][MySQL] a
 [VividCortex][VC]. Trying to use this library without actually understanding the concepts behind
 [Little's Law][LL], [Amdahl's Law][AL], and the [Universal Scalability Law][USL] will be difficult
 and potentially misleading.
-
-## Roadmap
-
-While `usl4l` is currently a functional port of `usl4j`, there are several potential enhancements for the future:
-
-*   **Command-Line Interface (CLI):** A simple CLI for quick modeling without needing to write a script.
-*   **Additional Input Formats:** Support for CSV or JSON input to make it easier to work with data from various load testing tools.
-*   **Visualization:** Integration with a plotting library to generate graphs of the scalability model.
 
 ## License
 

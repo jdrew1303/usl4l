@@ -1,0 +1,98 @@
+#!/usr/bin/env lua
+
+-- Set package path to include vendored and project libraries
+package.path = "./lua/?.lua;" .. package.path
+package.path = "./lua/vendor/?.lua;" .. package.path
+
+local argparse = require("argparse")
+local model = require("usl4l.model")
+local parser = require("usl4l.parser")
+
+local cli = argparse("usl4l", "A command-line tool for the Universal Scalability Law.")
+
+cli:argument("file", "Input file with measurement data. Reads from stdin if not provided.")
+    :args("?")
+    :default("-")
+    :defmode("a")
+
+cli:option("-f --format", "Input data format.", "csv")
+    :convert(function(value)
+        if value == "csv" or value == "json" then
+            return value
+        end
+        return nil, "invalid format: " .. value .. " (choose from 'csv' or 'json')"
+    end)
+
+cli:option("-p --predict", "Predict throughput for a given concurrency level. Can be specified multiple times.")
+    :count("*")
+    :convert(tonumber)
+
+cli:flag("--plot", "Generate a Gnuplot script for visualization.")
+
+local args = cli:parse()
+
+-- Read input data
+local input_data
+if not args.file or args.file == "-" then
+    input_data = io.stdin:read("*a")
+else
+    local f = io.open(args.file, "r")
+    if not f then
+        io.stderr:write("Error: Could not open file " .. args.file .. "\n")
+        os.exit(1)
+    end
+    input_data = f:read("*a")
+    f:close()
+end
+
+-- Parse data
+local measurements
+if args.format == "csv" then
+    measurements = parser.parse_csv(input_data)
+elseif args.format == "json" then
+    measurements = parser.parse_json(input_data)
+end
+
+if #measurements < 6 then
+    io.stderr:write("Error: Not enough data points to build a model. Need at least 6.\n")
+    os.exit(1)
+end
+
+-- Build model
+local ok, fitted_model = pcall(model.build, measurements)
+if not ok then
+    io.stderr:write("Error: Could not build model. " .. tostring(fitted_model) .. "\n")
+    os.exit(1)
+end
+
+-- Print model parameters
+print(string.format("Model Parameters:"))
+print(string.format("  Sigma (Contention): %f", fitted_model.sigma))
+print(string.format("  Kappa (Crosstalk):  %f", fitted_model.kappa))
+print(string.format("  Lambda (Ideal):     %f", fitted_model.lambda))
+print(string.format("\nPeak Performance:"))
+print(string.format("  Max Concurrency: %d", fitted_model:max_concurrency()))
+print(string.format("  Max Throughput:  %.2f", fitted_model:max_throughput()))
+
+-- Print predictions
+if args.predict and #args.predict > 0 then
+    print("\nPredictions:")
+    for _, n in ipairs(args.predict) do
+        print(string.format("  At concurrency %d, expected throughput is %.2f", n, fitted_model:throughput_at_concurrency(n)))
+    end
+end
+
+-- Generate Gnuplot script
+if args.plot then
+    print("\n-- Gnuplot Script --")
+    print("set title 'USL Model'")
+    print("set xlabel 'Concurrency (N)'")
+    print("set ylabel 'Throughput (X)'")
+    print("set grid")
+    print(string.format("usl(n) = (%f * n) / (1 + %f * (n - 1) + %f * n * (n - 1))", fitted_model.lambda, fitted_model.sigma, fitted_model.kappa))
+    print("plot usl(x) with lines title 'Fitted Model', '-' with points pt 7 title 'Measurements'")
+    for _, m in ipairs(measurements) do
+        print(string.format("%d %f", m.concurrency, m.throughput))
+    end
+    print("e")
+end
