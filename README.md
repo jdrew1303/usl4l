@@ -65,6 +65,10 @@ for i = 10, 200, 10 do
 end
 ```
 
+## Attribution
+
+This library is a Lua port of Coda Hale's excellent [usl4j-repo] library. His [blog post on the subject][usl4j-blog] is also a recommended read. The core concepts and the test data are derived from his original work.
+
 ## Further reading
 
 I strongly recommend [Practical Scalability Analysis with the Universal Scalability Law][PSA], a
@@ -75,7 +79,7 @@ and potentially misleading.
 
 ## License
 
-Copyright © 2017 Coda Hale
+Copyright © 2024 James Drew
 
 Distributed under the Apache License 2.0.
 
@@ -87,3 +91,5 @@ Distributed under the Apache License 2.0.
 [BS]: https://www.xaprb.com/
 [MySQL]: http://shop.oreilly.com/product/0636920022343.do
 [VC]: https://www.vividcortex.com/
+[usl4j-repo]: https://github.com/codahale/usl4j
+[usl4j-blog]: https://codahale.com/usl4j-and-you/
