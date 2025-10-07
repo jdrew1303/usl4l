@@ -9,6 +9,7 @@ jobs:
       - uses: leafo/gh-actions-lua@v9
         with:
           luaVersion: "5.3"
+          buildCache: false
       - run: |
           lua -e "package.path=package.path..';lua/?.lua;'" tests/model_test.lua
           lua -e "package.path=package.path..';lua/?.lua;'" tests/measurement_test.lua
