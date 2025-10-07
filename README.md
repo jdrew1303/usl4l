@@ -65,6 +65,79 @@ for i = 10, 200, 10 do
 end
 ```
 
+## Example with `wrk2`
+
+[wrk2](https://github.com/giltene/wrk2) is a popular load testing tool that can be used to generate the necessary measurements for `usl4l`.
+
+First, run `wrk2` against your application with varying concurrency levels. For example, to test with 1 to 32 concurrent connections:
+
+```bash
+#!/bin/bash
+
+for i in {1..32}; do
+  echo "Testing with $i connections..."
+  # This example assumes a fixed rate. Adjust -R as needed for your application.
+  wrk2 -t1 -c$i -d30s -R2000 http://localhost:8080/api > "results/c$i.txt"
+done
+```
+
+This script runs `wrk2` for 30 seconds at each concurrency level from 1 to 32 and saves the output to a separate file for each run.
+
+Next, you need to parse the output of `wrk2` to extract the concurrency and throughput for each run. The following Lua script will parse the result files, build a model, and print predictions:
+
+```lua
+local measurement = require "usl4l.measurement"
+local model = require "usl4l.model"
+
+local measurements = {}
+
+-- Create a directory for results if it doesn't exist
+-- (This part would be run before the bash script)
+-- os.execute("mkdir -p results")
+
+for i = 1, 32 do
+  local concurrency = i
+  local filename = string.format("results/c%d.txt", i)
+  local f = io.open(filename, "r")
+
+  if f then
+    local content = f:read("*a")
+    f:close()
+
+    -- Find the throughput from the wrk2 output
+    local _, _, throughput = string.find(content, "Requests/sec:%s+(%d+.%d+)")
+    if throughput then
+      print(string.format("Concurrency: %d, Throughput: %f", concurrency, throughput))
+      table.insert(measurements, measurement.of_concurrency_and_throughput(concurrency, tonumber(throughput)))
+    else
+      print(string.format("Could not find throughput for concurrency %d in %s", i, filename))
+    end
+  else
+    print(string.format("Could not open file %s", filename))
+  end
+end
+
+if #measurements > 1 then
+  -- Build a model from the measurements
+  local fitted_model = model.build(measurements)
+
+  print("\n--- Model Results ---")
+  print(string.format("Sigma (contention): %f", fitted_model.sigma))
+  print(string.format("Kappa (crosstalk): %f", fitted_model.kappa))
+  print(string.format("Lambda (throughput at N=1): %f", fitted_model.lambda))
+  print(string.format("Max Throughput: %f at %d users", fitted_model:max_throughput(), fitted_model:max_concurrency()))
+
+  print("\n--- Predictions ---")
+  for i = 40, 100, 10 do
+    print(string.format("At %d workers, expect %f req/sec", i, fitted_model:throughput_at_concurrency(i)))
+  end
+else
+  print("\nNot enough measurements to build a model.")
+end
+```
+
+This script reads each `wrk2` output file, extracts the throughput, and creates a `usl4l` model. It then prints the model's parameters and some predictions for higher concurrency levels.
+
 ## Attribution
 
 This library is a Lua port of Coda Hale's excellent [usl4j-repo] library. His [blog post on the subject][usl4j-blog] is also a recommended read. The core concepts and the test data are derived from his original work.
@@ -76,6 +149,14 @@ free e-book by [Baron Schwartz][BS], author of [High Performance MySQL][MySQL] a
 [VividCortex][VC]. Trying to use this library without actually understanding the concepts behind
 [Little's Law][LL], [Amdahl's Law][AL], and the [Universal Scalability Law][USL] will be difficult
 and potentially misleading.
+
+## Roadmap
+
+While `usl4l` is currently a functional port of `usl4j`, there are several potential enhancements for the future:
+
+*   **Command-Line Interface (CLI):** A simple CLI for quick modeling without needing to write a script.
+*   **Additional Input Formats:** Support for CSV or JSON input to make it easier to work with data from various load testing tools.
+*   **Visualization:** Integration with a plotting library to generate graphs of the scalability model.
 
 ## License
 

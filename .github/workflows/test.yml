@@ -1,0 +1,14 @@
+name: Test
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: leafo/gh-actions-lua@v9
+        with:
+          luaVersion: "5.3"
+      - run: |
+          lua -e "package.path=package.path..';lua/?.lua;'" tests/model_test.lua
+          lua -e "package.path=package.path..';lua/?.lua;'" tests/measurement_test.lua
