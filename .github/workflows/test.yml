@@ -10,6 +10,12 @@ jobs:
         with:
           luaVersion: "5.3"
           buildCache: false
+      - name: Install Luacheck
+        run: |
+          luarocks install luacheck
+      - name: Lint
+        run: |
+          luacheck lua bin
       - name: Run Tests
         run: |
           lua -e "package.path=package.path..';lua/?.lua;'" tests/model_test.lua

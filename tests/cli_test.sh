@@ -30,6 +30,28 @@ run_test() {
     return $status
 }
 
+run_failing_test() {
+    local test_name="$1"
+    local command="$2"
+    local expected_error="$3"
+    local status=$SUCCESS
+
+    echo "--- Running test: $test_name ---"
+    output=$(eval "$command" 2>&1)
+
+    if echo "$output" | grep -qF "$expected_error"; then
+        echo "PASSED"
+    else
+        echo "FAILED"
+        echo "  Command: $command"
+        echo "  Expected to find: $expected_error"
+        echo "  Got: $output"
+        status=$FAILURE
+    fi
+    echo ""
+    return $status
+}
+
 # --- Test Cases ---
 
 # 1. Test CSV input from file
@@ -68,14 +90,29 @@ run_test "Plot option with JSON" \
     "32 12074.39" || exit $FAILURE
 
 # 8. Test for error on not enough data points
-echo "--- Running test: Error on insufficient data ---"
-if $CLI_SCRIPT <(echo "concurrency,throughput\n1,100\n2,200") >/dev/null 2>&1; then
-    echo "FAILED: Expected command to fail but it succeeded."
-    exit $FAILURE
-else
-    echo "PASSED"
-fi
-echo ""
+run_failing_test "Error on insufficient data" \
+    "$CLI_SCRIPT <(echo 'concurrency,throughput\n1,100\n2,200')" \
+    "Error: Not enough data points to build a model. Need at least 6." || exit $FAILURE
+
+# 9. Test for malformed CSV
+run_failing_test "Error on malformed CSV" \
+    "$CLI_SCRIPT ${FIXTURES_DIR}/malformed.csv" \
+    "Invalid number of columns at line 2" || exit $FAILURE
+
+# 10. Test for malformed JSON
+run_failing_test "Error on malformed JSON" \
+    "$CLI_SCRIPT --format json ${FIXTURES_DIR}/malformed.json" \
+    "no valid JSON value" || exit $FAILURE
+
+# 11. Test for invalid format argument
+run_failing_test "Error on invalid format argument" \
+    "$CLI_SCRIPT --format blah ${FIXTURES_DIR}/cisco.csv" \
+    "invalid format: blah" || exit $FAILURE
+
+# 12. Test for nonexistent file
+run_failing_test "Error on nonexistent file" \
+    "$CLI_SCRIPT nonexistent.csv" \
+    "Error: Could not open file nonexistent.csv" || exit $FAILURE
 
 echo "--- All CLI tests passed! ---"
 exit $SUCCESS

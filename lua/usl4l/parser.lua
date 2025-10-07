@@ -15,7 +15,6 @@
 --]]
 
 -- Vendored libraries
-package.path = package.path .. ";./lua/vendor/?.lua"
 local json = require("dkjson")
 
 -- Core library
@@ -39,13 +38,18 @@ function M.parse_csv(csv_string)
                 table.insert(fields, field)
             end
 
-            if #fields == 2 then
-                local concurrency = tonumber(fields[1])
-                local throughput = tonumber(fields[2])
-                if concurrency and throughput then
-                    table.insert(measurements, measurement.of_concurrency_and_throughput(concurrency, throughput))
-                end
+            if #fields ~= 2 then
+                error("Invalid number of columns at line " .. i)
             end
+
+            local concurrency = tonumber(fields[1])
+            local throughput = tonumber(fields[2])
+
+            if not concurrency or not throughput then
+                error("Invalid number format at line " .. i)
+            end
+
+            table.insert(measurements, measurement.of_concurrency_and_throughput(concurrency, throughput))
         end
     end
     return measurements
@@ -54,9 +58,15 @@ end
 -- Parses a JSON string into a table of measurements.
 -- Expects an array of objects, each with "concurrency" and "throughput" keys.
 function M.parse_json(json_string)
-    local ok, data = pcall(json.decode, json_string)
-    if not ok then
-        error("Failed to parse JSON: " .. tostring(data))
+    local data, pos, err = json.decode(json_string)
+    if not data then
+        error(err)
+    end
+
+    -- Check for trailing garbage by trying to parse the rest of the string
+    local _, _, err2 = json.decode(json_string, pos)
+    if err2 and not err2:match("reached the end") then
+        error(err2)
     end
 
     local measurements = {}
