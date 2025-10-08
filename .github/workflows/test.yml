@@ -9,16 +9,21 @@ jobs:
       - uses: leafo/gh-actions-lua@v9
         with:
           luaVersion: "5.3"
-          buildCache: false
+      - uses: leafo/gh-actions-luarocks@v4
+      - name: Install dependencies
+        run: |
+          luarocks make usl4l-0.1.0-1.rockspec
       - name: Install Luacheck
         run: |
           luarocks install luacheck
       - name: Lint
         run: |
           luacheck lua bin
-      - name: Run Tests
+      - name: Run Unit Tests
         run: |
-          lua -e "package.path=package.path..';lua/?.lua;'" tests/model_test.lua
-          lua -e "package.path=package.path..';lua/?.lua;'" tests/measurement_test.lua
+          lua tests/model_test.lua
+          lua tests/measurement_test.lua
           lua tests/parser_test.lua
+      - name: Run CLI Tests
+        run: |
           ./tests/cli_test.sh

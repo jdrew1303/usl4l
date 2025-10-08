@@ -1,7 +1,7 @@
 package = "usl4l"
 version = "0.1.0-1"
 source = {
-   url = "git://github.com/marcelog/usl4l"
+   url = "git://github.com/jdrew1303/usl4l"
 }
 description = {
    summary = "A Lua implementation of the Universal Scalability Law",
@@ -9,7 +9,7 @@ description = {
       usl4l is a Lua implementation of the Universal Scalability Law (USL), a model for quantifying the scalability of a system.
       It provides a library and a command-line interface to analyze performance measurements and predict the scalability of a system.
    ]],
-   homepage = "https://github.com/marcelog/usl4l",
+   homepage = "https://github.com/jdrew1303/usl4l",
    license = "MIT"
 }
 dependencies = {
@@ -21,7 +21,8 @@ build = {
    type = "builtin",
    modules = {
       ["usl4l.model"] = "lua/usl4l/model.lua",
-      ["usl4l.parser"] = "lua/usl4l/parser.lua"
+      ["usl4l.parser"] = "lua/usl4l/parser.lua",
+      ["usl4l.measurement"] = "lua/usl4l/measurement.lua"
    },
    install = {
       bin = { "bin/usl4l" }

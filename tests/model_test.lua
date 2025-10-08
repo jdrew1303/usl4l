@@ -1,3 +1,6 @@
+-- Initialize LuaRocks loader
+pcall(require, "luarocks.loader")
+
 local model = require "usl4l.model"
 local measurement = require "usl4l.measurement"
 

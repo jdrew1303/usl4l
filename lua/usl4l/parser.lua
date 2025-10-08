@@ -14,7 +14,6 @@
 -- limitations under the License.
 --]]
 
--- Vendored libraries
 local json = require("dkjson")
 
 -- Core library
