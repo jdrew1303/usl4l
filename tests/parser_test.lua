@@ -1,6 +1,6 @@
 -- Set package path to include vendored and project libraries
-package.path = "./lua/?.lua;" .. package.path
-package.path = "./lua/vendor/?.lua;" .. package.path
+-- Initialize LuaRocks loader
+pcall(require, "luarocks.loader")
 
 local parser = require("usl4l.parser")
 

@@ -1,8 +1,10 @@
 #!/usr/bin/env lua
 
--- Set package path to include vendored and project libraries
+-- Initialize LuaRocks loader
+pcall(require, "luarocks.loader")
+
+-- Set package path to include project libraries
 package.path = "./lua/?.lua;" .. package.path
-package.path = "./lua/vendor/?.lua;" .. package.path
 
 local argparse = require("argparse")
 local model = require("usl4l.model")
@@ -46,11 +48,16 @@ else
 end
 
 -- Parse data
-local measurements
+local ok, measurements
 if args.format == "csv" then
-    measurements = parser.parse_csv(input_data)
-elseif args.format == "json" then
-    measurements = parser.parse_json(input_data)
+    ok, measurements = pcall(parser.parse_csv, input_data)
+else
+    ok, measurements = pcall(parser.parse_json, input_data)
+end
+
+if not ok then
+    io.stderr:write("Error parsing input: " .. tostring(measurements) .. "\n")
+    os.exit(1)
 end
 
 if #measurements < 6 then
@@ -61,7 +68,7 @@ end
 -- Build model
 local ok, fitted_model = pcall(model.build, measurements)
 if not ok then
-    io.stderr:write("Error: Could not build model. " .. tostring(fitted_model) .. "\n")
+    io.stderr:write("Error building model: " .. tostring(fitted_model) .. "\n")
     os.exit(1)
 end
 

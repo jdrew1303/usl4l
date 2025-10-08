@@ -13,6 +13,16 @@ stay under your SLA's latency requirements.
 
 The model coefficients and predictions should be within 0.02% of those listed in the book.
 
+## Installation
+
+You can install `usl4l` using [LuaRocks](https://luarocks.org/), the package manager for Lua modules.
+
+```bash
+luarocks install usl4l
+```
+
+This will install the `usl4l` library and the command-line script.
+
 ## Command-Line Interface
 
 `usl4l` now includes a powerful command-line interface (CLI) for quick and easy scalability analysis without needing to write any code.

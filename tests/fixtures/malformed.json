@@ -1,0 +1,8 @@
+[
+  {"concurrency": 1, "throughput": 100},
+  {"concurrency": 2, "throughput": 200},
+  {"concurrency": 3, "throughput": 300},
+  {"concurrency": 4, "throughput": 400},
+  {"concurrency": 5, "throughput": 500},
+  {"concurrency": 6, "throughput": 600}
+]xx
